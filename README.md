@@ -9,6 +9,7 @@ The app is designed as a quiet desktop workspace, not a full project management 
 - Local-first desktop app
 - No central server for MVP
 - Single-screen Visual Canvas
+- OpenUI-style generative UI for the Visual Canvas only
 - Bottom chat composer
 - Obsidian-first task ingestion
 - SQLite as the local source of truth
@@ -23,6 +24,7 @@ The app is designed as a quiet desktop workspace, not a full project management 
 - Vite
 - Bun
 - Tailwind CSS
+- OpenUI for AI-generated VisualCanvas rendering
 - Zustand
 - TanStack Query
 - Rust backend commands
@@ -36,16 +38,27 @@ Cole MVP should:
 2. Normalize checklist items into local SQLite tasks.
 3. Render a single-screen Visual Canvas.
 4. Group tasks into Focus, Next, and Finish.
-5. Provide a calm bottom chat composer.
-6. Allow local done state.
-7. Use an OpenAI-compatible model for validated recommendations when enabled.
-8. Keep working without LLM access through deterministic fallback grouping.
+5. Compose the Visual Canvas from registered OpenUI components when possible.
+6. Provide a calm bottom chat composer.
+7. Allow local done state.
+8. Use an OpenAI-compatible model for validated recommendations when enabled.
+9. Keep working without LLM access through deterministic fallback grouping.
+
+## Current Implementation
+
+The repository now contains the first Tauri desktop implementation:
+
+- Tauri v2 shell with Rust commands
+- React 18 + TypeScript + Vite frontend run with Bun
+- Tailwind CSS visual system
+- OpenUI component library for `VisualCanvas`
+- Deterministic React fallback when OpenUI Lang is invalid
+- SQLite local database through `rusqlite`
+- Obsidian Markdown checklist parser
+- Focus / Next / Finish recommendation flow
+- Local-only mark-done action
 
 ## Development
-
-This repository currently contains the product and agent operating contract. The Tauri app scaffold has not been created yet.
-
-Expected commands after the scaffold exists:
 
 ```bash
 bun install

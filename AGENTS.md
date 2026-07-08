@@ -71,6 +71,7 @@ Use this stack unless the user explicitly changes direction.
 - Frontend: React 18 + TypeScript + Vite
 - Package Manager / JS Runtime: Bun
 - Styling: Tailwind CSS
+- Generative UI: OpenUI for AI-generated VisualCanvas rendering only
 - State Management: Zustand
 - Server State / API Cache: TanStack Query
 - Local Database: SQLite
@@ -107,6 +108,65 @@ Use Bun for frontend package management and scripts:
 
 ---
 
+## 2.1 OpenUI Direction
+
+Cole should use OpenUI-style generative UI for the upper Visual Canvas.
+
+The AI must not generate arbitrary React code. Instead, Cole should expose a small registered component library that the AI can compose.
+
+Use OpenUI only for the upper `VisualCanvas` area. Do not use OpenUI for core task storage, sync, ranking, source connectors, or source mutation.
+
+The bottom `ChatComposer` remains a normal React component.
+
+The upper `VisualCanvas` may be rendered from OpenUI Lang or an OpenUI-compatible render schema. If OpenUI rendering fails, Cole must fall back to deterministic React rendering of the same validated recommendation flow.
+
+---
+
+## 2.2 OpenUI Component Library
+
+Register only a minimal set of UI components for MVP:
+
+- `TaskFlow`
+- `TaskGroup`
+- `TaskCard`
+- `TaskArrow`
+- `SourceBadge`
+- `EmptyCanvas`
+- `RecommendationNote`
+
+The AI may compose these components to draw today's task flow.
+
+The default visual structure should be:
+
+```txt
+Focus -> Next -> Finish
+```
+
+---
+
+## 2.3 LLM Rendering Policy
+
+The LLM may generate UI instructions only for the `VisualCanvas`.
+
+Allowed:
+
+- Compose registered OpenUI components
+- Group tasks visually
+- Explain the recommendation briefly
+- Draw simple task flow
+
+Not allowed:
+
+- Generate arbitrary JSX
+- Generate executable JavaScript
+- Modify tasks directly
+- Call external APIs directly
+- Write to Obsidian, Notion, or Dooray
+
+Do not pass OpenUI runtime tools or mutation providers to the renderer in MVP.
+
+---
+
 ## 3. Project Structure
 
 Use this structure as the initial target.
@@ -121,7 +181,6 @@ cole/
 ├─ tsconfig.json
 ├─ index.html
 ├─ src/
-│  ├─ app/
 │  ├─ components/
 │  │  ├─ AppShell.tsx
 │  │  ├─ VisualCanvas.tsx
@@ -129,21 +188,22 @@ cole/
 │  │  ├─ ChatComposer.tsx
 │  │  ├─ SourceBadge.tsx
 │  │  └─ EmptyState.tsx
-│  ├─ features/
-│  │  ├─ tasks/
-│  │  ├─ sources/
-│  │  └─ recommendations/
 │  ├─ lib/
+│  │  ├─ openui/
+│  │  ├─ api/
+│  │  └─ store/
 │  ├─ types/
 │  └─ main.tsx
 ├─ src-tauri/
 │  ├─ Cargo.toml
 │  ├─ tauri.conf.json
 │  └─ src/
-│     ├─ commands/
-│     ├─ db/
+│     ├─ commands.rs
+│     ├─ db.rs
+│     ├─ models.rs
+│     ├─ recommendations.rs
 │     ├─ sources/
-│     ├─ llm/
+│     │  └─ obsidian.rs
 │     └─ main.rs
 ├─ testdata/
 │  ├─ obsidian-vault/
@@ -171,6 +231,7 @@ MVP features:
    - Focus
    - Next
    - Finish
+   - Rendered through registered OpenUI components when possible
 4. Provide a bottom chat input:
    - "오늘 뭐부터 할까?"
    - "30분 안에 할 일만 보여줘"
@@ -191,7 +252,7 @@ The screen is divided into two main areas:
 1. Visual Canvas
    - Takes most of the screen.
    - Looks like a clean white glass board or paper canvas.
-   - AI visually draws the user's task flow here.
+   - AI visually draws the user's task flow here using registered OpenUI components.
    - Use only a few task cards.
    - Avoid dense tables, sidebars, dashboards, or complex navigation.
 2. Bottom Chat Composer
@@ -230,10 +291,10 @@ Required components:
 
 - `AppShell`
 - `VisualCanvas`
-- `TaskFlowCard`
 - `ChatComposer`
 - `SourceBadge`
 - `EmptyState`
+- OpenUI component registrations for `TaskFlow`, `TaskGroup`, `TaskCard`, `TaskArrow`, `EmptyCanvas`, and `RecommendationNote`
 
 Avoid implementing these in MVP:
 
@@ -263,6 +324,7 @@ Rules:
 - Avoid clutter.
 - Do not show more than 7 task items on the first screen.
 - AI recommendations should feel drawn, not rendered as a spreadsheet.
+- Render through OpenUI Lang when valid, and fall back to deterministic React rendering when invalid.
 
 ---
 
@@ -422,6 +484,8 @@ The LLM must not directly modify source files or external services.
 
 The LLM output must be validated before rendering.
 
+The LLM must output either the validated AI Recommendation Schema or OpenUI Lang that composes only Cole's registered OpenUI components.
+
 The app must remain useful with LLM access disabled. When LLM access is disabled or unavailable, Cole should still show local tasks using deterministic fallback grouping.
 
 ---
@@ -469,12 +533,13 @@ Validation rules:
 - Unknown task IDs must be ignored.
 - Render validated output only.
 - Cache validated recommendations in SQLite.
+- When converting to OpenUI Lang, use only the registered Cole OpenUI component library.
 
 ---
 
 ## 14. Deterministic Fallback
 
-LLM output is an assistant layer, not the source of truth.
+LLM and OpenUI output are assistant layers, not the source of truth.
 
 When AI is disabled, fails, or returns invalid JSON, Cole must still group tasks locally:
 
@@ -568,7 +633,7 @@ Required tests:
 - deterministic fallback grouping
 - AI recommendation schema validation
 - Tauri command input validation
-- Visual Canvas rendering of Focus / Next / Finish groups
+- Visual Canvas rendering of Focus / Next / Finish groups through OpenUI and deterministic fallback
 - Chat Composer basic input behavior
 
 Recommended tools:
@@ -621,11 +686,12 @@ Follow this order unless the user explicitly changes priority.
 4. Implement local task model.
 5. Implement Obsidian Markdown checklist parser.
 6. Render tasks as Focus / Next / Finish cards.
-7. Add OpenAI-compatible LLM adapter.
-8. Add AI recommendation schema validation.
-9. Add local done state.
-10. Add Notion connector.
-11. Add Dooray connector.
+7. Add Cole OpenUI component library and VisualCanvas renderer.
+8. Add OpenAI-compatible LLM adapter.
+9. Add AI recommendation schema validation.
+10. Add local done state.
+11. Add Notion connector.
+12. Add Dooray connector.
 
 Do not start Notion or Dooray before Obsidian, local SQLite tasks, and the Visual Canvas are stable.
 
@@ -639,6 +705,7 @@ Do not start Notion or Dooray before Obsidian, local SQLite tasks, and the Visua
 - Do not introduce a hosted backend.
 - Do not hardcode tokens or user paths.
 - Keep domain logic independent from UI.
+- Keep OpenUI isolated to VisualCanvas rendering.
 - Keep provider-specific LLM logic behind a small adapter boundary.
 - Keep source-specific parsing behind connector modules.
 - Write tests for parser, database, recommendation validation, and local grouping before expanding UI complexity.
@@ -654,9 +721,9 @@ Do not start Notion or Dooray before Obsidian, local SQLite tasks, and the Visua
 ### Rust
 
 - Keep command handlers thin.
-- Put database logic under `src-tauri/src/db/`.
+- Put database logic under `src-tauri/src/db.rs` until it needs to be split into a folder.
 - Put source parsing under `src-tauri/src/sources/`.
-- Put LLM request and validation logic under `src-tauri/src/llm/`.
+- Put LLM request and validation logic under `src-tauri/src/llm/` when the LLM adapter is added.
 - Return structured errors suitable for user-facing display.
 - Do not log secrets or full private prompts.
 
@@ -674,6 +741,7 @@ Do not start Notion or Dooray before Obsidian, local SQLite tasks, and the Visua
 - Respect source-level LLM policy.
 - Redact sensitive values before request construction.
 - Never allow LLM output to directly mutate source data.
+- Never allow LLM output to generate arbitrary JSX or executable JavaScript.
 
 ---
 
@@ -685,6 +753,8 @@ Do not start Notion or Dooray before Obsidian, local SQLite tasks, and the Visua
 - Do not add complex navigation in MVP.
 - Do not show raw task tables as the main UI.
 - Do not send source content to LLM without explicit user setting.
+- Do not use OpenUI outside the VisualCanvas in MVP.
+- Do not allow OpenUI output to call tools or mutations in MVP.
 - Do not write back to Dooray, Notion, or Obsidian automatically.
 - Do not add calendar, kanban, team, or sync features in MVP.
 - Do not make Notion or Dooray required for MVP validation.
