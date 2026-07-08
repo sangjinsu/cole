@@ -12,3 +12,6 @@ Dated work history, verification notes, and major project milestones.
 - Updated the frontend tooling direction to use Bun for dependency installation and package scripts.
 - Reduced the MVP contract to Obsidian-first task ingestion, a single-screen Visual Canvas, Focus / Next / Finish recommendations, a bottom Chat Composer, local done state, and validated AI recommendation output.
 - Prepared the initial `README.md` and GitHub publication target for `sangjinsu/cole`.
+- Created the public GitHub repository `sangjinsu/cole` at `https://github.com/sangjinsu/cole`.
+- Pushed `main` to `origin/main` with initial project contract docs and README.
+- Verified the GitHub repository description: `Local-first AI task assistant that turns checklist items into a Focus / Next / Finish flow.`

@@ -14,6 +14,9 @@ Actionable project tasks for AI agents. Use Markdown checkboxes and update this 
 - [x] Rewrite `AGENTS.md` around Tauri, Rust, single-screen Visual Canvas, and Obsidian-first MVP direction.
 - [x] Set Bun as the frontend package manager and script runner in `AGENTS.md`.
 - [x] Prepare initial README and GitHub repository metadata.
+- [x] Create public GitHub repository `sangjinsu/cole`.
+- [x] Push `main` to `origin/main`.
+- [x] Verify README and repository description on GitHub.
 - [ ] Start Phase 0 Tauri product skeleton when requested.
 
 ## Phase 0: Tauri Project Skeleton
