@@ -1,67 +1,111 @@
-use std::path::PathBuf;
-
 use tauri::State;
 
 use crate::{
+    analysis::analyze_checklist_with_state,
+    credentials,
     db::AppState,
-    models::{CreateObsidianSourceInput, RecommendationFlowDto, SourceDto, SyncResultDto, TaskDto},
-    recommendations::build_recommendation_flow,
-    sources::obsidian::parse_vault,
+    models::{
+        AnalysisSnapshotDto, AnalyzeChecklistInput, ArchiveChecklistNodeInput, ChecklistTreeDto,
+        CommandError, CreateChecklistNodeInput, OpenAiConnectionResultDto,
+        OpenAiCredentialStatusDto, RenameChecklistNodeInput, SetTaskCheckedInput,
+        SetTaskEstimateInput,
+    },
 };
 
 #[tauri::command]
-pub fn create_obsidian_source(
+pub fn get_default_checklist(state: State<'_, AppState>) -> Result<ChecklistTreeDto, CommandError> {
+    state.with_db(|db| db.get_default_checklist())
+}
+
+#[tauri::command]
+pub fn create_checklist_node(
     state: State<'_, AppState>,
-    input: CreateObsidianSourceInput,
-) -> Result<SourceDto, String> {
-    state.with_db(|db| db.create_obsidian_source(input))
+    input: CreateChecklistNodeInput,
+) -> Result<ChecklistTreeDto, CommandError> {
+    state.with_db(|db| db.create_checklist_node(input))
 }
 
 #[tauri::command]
-pub fn list_sources(state: State<'_, AppState>) -> Result<Vec<SourceDto>, String> {
-    state.with_db(|db| db.list_sources())
-}
-
-#[tauri::command]
-pub fn sync_obsidian_source(
+pub fn rename_checklist_node(
     state: State<'_, AppState>,
-    source_id: String,
-) -> Result<SyncResultDto, String> {
-    state.with_db(|db| {
-        let source = db.get_source(&source_id)?;
-        let vault_path = source
-            .vault_path
-            .clone()
-            .ok_or_else(|| "source does not have a vault path".to_string())?;
-        let tasks = parse_vault(&source.id, &PathBuf::from(vault_path))?;
-        let upserts = db.upsert_tasks(&tasks)?;
-        Ok(SyncResultDto {
-            source_id,
-            upserts,
-            warnings: vec![],
-        })
-    })
+    input: RenameChecklistNodeInput,
+) -> Result<ChecklistTreeDto, CommandError> {
+    state.with_db(|db| db.rename_checklist_node(input))
 }
 
 #[tauri::command]
-pub fn list_tasks(state: State<'_, AppState>) -> Result<Vec<TaskDto>, String> {
-    state.with_db(|db| db.list_tasks())
-}
-
-#[tauri::command]
-pub fn get_recommendation_flow(
+pub fn set_task_checked(
     state: State<'_, AppState>,
-) -> Result<RecommendationFlowDto, String> {
-    state.with_db(|db| {
-        let tasks = db.list_tasks()?;
-        Ok(build_recommendation_flow(&tasks))
-    })
+    input: SetTaskCheckedInput,
+) -> Result<ChecklistTreeDto, CommandError> {
+    state.with_db(|db| db.set_task_checked(input))
 }
 
 #[tauri::command]
-pub fn mark_task_done_local(
+pub fn set_task_estimate(
     state: State<'_, AppState>,
-    task_id: String,
-) -> Result<TaskDto, String> {
-    state.with_db(|db| db.mark_task_done_local(&task_id))
+    input: SetTaskEstimateInput,
+) -> Result<ChecklistTreeDto, CommandError> {
+    state.with_db(|db| db.set_task_estimate(input))
+}
+
+#[tauri::command]
+pub fn archive_checklist_node(
+    state: State<'_, AppState>,
+    input: ArchiveChecklistNodeInput,
+) -> Result<ChecklistTreeDto, CommandError> {
+    state.with_db(|db| db.archive_checklist_node(input))
+}
+
+#[tauri::command]
+pub async fn analyze_checklist(
+    state: State<'_, AppState>,
+    input: AnalyzeChecklistInput,
+) -> Result<AnalysisSnapshotDto, CommandError> {
+    analyze_checklist_with_state(state.inner(), input).await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub fn get_latest_analysis_snapshot(
+    state: State<'_, AppState>,
+    checklist_id: String,
+) -> Result<Option<AnalysisSnapshotDto>, CommandError> {
+    state.with_db(|db| db.get_latest_analysis_snapshot(&checklist_id))
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub fn get_analysis_snapshot(
+    state: State<'_, AppState>,
+    snapshot_id: String,
+) -> Result<AnalysisSnapshotDto, CommandError> {
+    state.with_db(|db| db.get_analysis_snapshot(&snapshot_id))
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub fn set_openai_api_key(
+    state: State<'_, AppState>,
+    api_key: String,
+) -> Result<OpenAiCredentialStatusDto, CommandError> {
+    credentials::set_openai_api_key(state.inner(), &api_key)
+}
+
+#[tauri::command]
+pub fn get_openai_credential_status(
+    state: State<'_, AppState>,
+) -> Result<OpenAiCredentialStatusDto, CommandError> {
+    credentials::get_openai_credential_status(state.inner())
+}
+
+#[tauri::command]
+pub fn delete_openai_api_key(
+    state: State<'_, AppState>,
+) -> Result<OpenAiCredentialStatusDto, CommandError> {
+    credentials::delete_openai_api_key(state.inner())
+}
+
+#[tauri::command]
+pub async fn test_openai_connection(
+    state: State<'_, AppState>,
+) -> Result<OpenAiConnectionResultDto, CommandError> {
+    credentials::test_openai_connection(state.inner()).await
 }

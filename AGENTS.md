@@ -2,853 +2,414 @@
 
 ## Project: Cole
 
-Cole is a local-first AI task assistant.
+Cole is a local-first desktop checklist assistant. It keeps one local checklist in SQLite and optionally uses AI to explain relationships and recommend what to do next.
 
-Cole collects checklist items from Obsidian, Notion, and Dooray, stores normalized tasks in local SQLite, and uses AI to arrange today's work into a simple visual flow.
+Cole is not a generic task manager, Markdown editor, or project-management dashboard. The checklist is the user's working surface; analysis is a secondary interpretation of that checklist.
 
-Cole must not feel like a generic task manager or a full project management dashboard. It should feel like a clean canvas where an AI secretary quietly arranges the user's day.
+## 1. Product Contract
 
----
+Cole has two views in one desktop window:
 
-## 0. Product Direction
+1. `Checklist View` is the default and primary workspace.
+2. `Analysis View` shows a virtual recommendation order and supporting reasons.
 
-Cole is a local-first AI task assistant.
+The bottom `ChatComposer` remains visible in both views. Use a small top segmented control for view switching. Do not add a sidebar, multi-tab workspace, hosted backend, account system, or cloud sync layer in the MVP.
 
-Cole collects checklist items from Obsidian, Notion, and Dooray, then asks AI to organize them into a simple visual task flow.
+Cole must answer:
 
-The app does not try to become a full project management tool. It should feel like a clean canvas where AI draws today's work flow.
-
-Cole should answer these questions:
-
-1. What unfinished checklist items exist locally or in connected sources?
-2. What should I focus on first?
-3. What should come next?
-4. What can I finish quickly?
-5. Why did Cole choose this order?
-6. Can I mark this task done safely?
-
----
-
-## 1. Architecture Principle
-
-Cole has no central server in MVP.
-
-All data is processed locally on the user's machine. The app may directly call external APIs such as Notion, Dooray, OpenAI, and Claude.
-
-SQLite is the local source of truth for normalized tasks, sync state, local done state, and recommendation cache.
-
-Do not introduce a hosted backend, user account server, or cloud sync layer unless explicitly requested.
-
-Correct mental model:
-
-```txt
-User PC
-├─ Cole desktop app
-│  ├─ React UI
-│  ├─ Tauri shell
-│  ├─ Rust backend commands
-│  ├─ SQLite local database
-│  ├─ Obsidian Markdown parser
-│  ├─ Notion connector
-│  ├─ Dooray connector
-│  └─ LLM adapter
-│
-└─ Direct external API calls
-   ├─ Notion API
-   ├─ Dooray API
-   ├─ OpenAI API
-   ├─ Anthropic Claude API
-   └─ Optional OpenAI-compatible / LiteLLM endpoint
-```
-
----
-
-## 2. Tech Stack
-
-Use this stack unless the user explicitly changes direction.
-
-- Desktop Framework: Tauri v2
-- Frontend: React 18 + TypeScript + Vite
-- Package Manager / JS Runtime: Bun
-- Styling: Tailwind CSS
-- Generative UI: OpenUI for AI-generated VisualCanvas rendering only
-- State Management: Zustand
-- Server State / API Cache: TanStack Query
-- Local Database: SQLite
-- SQLite Binding:
-  - Preferred: `rusqlite` in the Rust backend for task, source, sync, and recommendation logic.
-  - Allowed: Tauri SQL Plugin for simple app-local queries that do not bypass domain rules.
-- Backend Runtime: Rust through Tauri commands
-- LLM/API Calls:
-  - OpenAI API direct call
-  - Anthropic Claude API direct call
-  - OpenAI-compatible endpoint
-  - Future optional LiteLLM endpoint
-- Source Connectors:
-  - Obsidian local Markdown files
-  - Notion API
-  - Dooray API
-- Testing:
-  - Vitest for frontend
-  - Rust tests for backend commands, parser logic, database logic, and LLM schema validation
-- Code Quality:
-  - ESLint
-  - Prettier
-  - `cargo test`
-  - `cargo fmt`
-  - `cargo clippy`
-
-Prefer boring, stable libraries. Avoid large frameworks unless they clearly reduce implementation risk.
-
-Use Bun for frontend package management and scripts:
-
-- Use `bun install`, not other package-manager install commands.
-- Use `bun run <script>`, not other package-manager run commands.
-- Use `bunx` for one-off package execution.
-
----
-
-## 2.1 OpenUI Direction
-
-Cole should use OpenUI-style generative UI for the upper Visual Canvas.
-
-The AI must not generate arbitrary React code. Instead, Cole should expose a small registered component library that the AI can compose.
-
-Use OpenUI only for the upper `VisualCanvas` area. Do not use OpenUI for core task storage, sync, ranking, source connectors, or source mutation.
-
-The bottom `ChatComposer` remains a normal React component.
-
-The upper `VisualCanvas` may be rendered from OpenUI Lang or an OpenUI-compatible render schema. If OpenUI rendering fails, Cole must fall back to deterministic React rendering of the same validated recommendation flow.
-
----
-
-## 2.2 OpenUI Component Library
-
-Register only a minimal set of UI components for MVP:
-
-- `TaskFlow`
-- `TaskGroup`
-- `TaskCard`
-- `TaskArrow`
-- `SourceBadge`
-- `EmptyCanvas`
-- `RecommendationNote`
-
-The AI may compose these components to draw today's task flow.
-
-The default visual structure should be:
-
-```txt
-Focus -> Next -> Finish
-```
-
----
-
-## 2.3 LLM Rendering Policy
-
-The LLM may generate UI instructions only for the `VisualCanvas`.
-
-Allowed:
-
-- Compose registered OpenUI components
-- Group tasks visually
-- Explain the recommendation briefly
-- Draw simple task flow
-
-Not allowed:
-
-- Generate arbitrary JSX
-- Generate executable JavaScript
-- Modify tasks directly
-- Call external APIs directly
-- Write to Obsidian, Notion, or Dooray
-
-Do not pass OpenUI runtime tools or mutation providers to the renderer in MVP.
-
----
-
-## 3. Project Structure
-
-Use this structure as the initial target.
-
-```txt
-cole/
-├─ AGENTS.md
-├─ README.md
-├─ package.json
-├─ bun.lock
-├─ vite.config.ts
-├─ tsconfig.json
-├─ index.html
-├─ src/
-│  ├─ components/
-│  │  ├─ AppShell.tsx
-│  │  ├─ VisualCanvas.tsx
-│  │  ├─ TaskFlowCard.tsx
-│  │  ├─ ChatComposer.tsx
-│  │  ├─ SourceBadge.tsx
-│  │  └─ EmptyState.tsx
-│  ├─ lib/
-│  │  ├─ openui/
-│  │  ├─ api/
-│  │  └─ store/
-│  ├─ types/
-│  └─ main.tsx
-├─ src-tauri/
-│  ├─ Cargo.toml
-│  ├─ tauri.conf.json
-│  └─ src/
-│     ├─ commands.rs
-│     ├─ db.rs
-│     ├─ models.rs
-│     ├─ recommendations.rs
-│     ├─ sources/
-│     │  └─ obsidian.rs
-│     └─ main.rs
-├─ testdata/
-│  ├─ obsidian-vault/
-│  ├─ notion-responses/
-│  └─ dooray-responses/
-├─ docs/
-└─ .workspace/
-```
-
-Do not introduce a product backend server directory for MVP. Any local runtime used by Tauri must remain embedded in the desktop app.
-
----
-
-## 4. MVP Scope
-
-Implement only the minimum features required to validate the concept.
-
-MVP features:
-
-1. Load checklist items from one source first.
-   - Start with Obsidian Markdown files.
-   - Notion and Dooray connectors may be added after the local task model is stable.
-2. Normalize checklist items into local SQLite tasks.
-3. Show a simple AI-organized task flow:
-   - Focus
-   - Next
-   - Finish
-   - Rendered through registered OpenUI components when possible
-4. Provide a bottom chat input:
-   - "오늘 뭐부터 할까?"
-   - "30분 안에 할 일만 보여줘"
-   - "Dooray 업무 우선으로 정리해줘"
-5. Allow marking a task as done locally.
-6. Store task state and AI recommendations in SQLite.
-
-Do not implement complex project management features in MVP.
-
----
-
-## 5. UI/UX Direction
-
-Cole must use a minimal single-screen interface.
-
-The screen is divided into two main areas:
-
-1. Visual Canvas
-   - Takes most of the screen.
-   - Looks like a clean white glass board or paper canvas.
-   - AI visually draws the user's task flow here using registered OpenUI components.
-   - Use only a few task cards.
-   - Avoid dense tables, sidebars, dashboards, or complex navigation.
-2. Bottom Chat Composer
-   - Fixed at the bottom.
-   - User interacts with Cole through natural language.
-   - Chat input should be simple and calm.
-   - It may include a send button and optional source selector.
-
-The app should feel like:
-
-- a clean whiteboard
-- a glass sheet
-- a paper canvas
-- an AI secretary quietly arranging today's work
-
-Cole should communicate like a reliable assistant, not a chatbot.
-
-Good examples:
-
-```txt
-Cole has arranged your next steps.
-Focus here first.
-This task is next because it clears the path for the rest.
-This source is read-only, so Cole will only mark it done locally.
-```
-
-Avoid overly cute or loud copy.
-
----
-
-## 6. Frontend Components
-
-Keep the UI component set minimal.
-
-Required components:
-
-- `AppShell`
-- `VisualCanvas`
-- `ChatComposer`
-- `SourceBadge`
-- `EmptyState`
-- OpenUI component registrations for `TaskFlow`, `TaskGroup`, `TaskCard`, `TaskArrow`, `EmptyCanvas`, and `RecommendationNote`
-
-Avoid implementing these in MVP:
-
-- Full sidebar
-- Complex dashboard
-- Calendar view
-- Kanban board
-- Priority matrix
-- Multi-tab task management
-- Team workspace
-
----
-
-## 7. Visual Canvas Rules
-
-The `VisualCanvas` is the primary surface of Cole.
-
-Rules:
-
-- Show at most 3 main task groups by default.
-- Use simple labels:
-  - Focus
-  - Next
-  - Finish
-- Use thin arrows or subtle lines to show task flow.
-- Use handwritten-style annotations sparingly.
-- Avoid clutter.
-- Do not show more than 7 task items on the first screen.
-- AI recommendations should feel drawn, not rendered as a spreadsheet.
-- Render through OpenUI Lang when valid, and fall back to deterministic React rendering when invalid.
-
----
-
-## 8. Design System
-
-Use a minimal white glassmorphism style.
-
-Visual rules:
-
-- Background: warm white or very light gray
-- Main surface: translucent white glass panel
-- Border: thin light gray or pale blue
-- Shadow: soft and subtle
-- Accent: calm blue
-- Text: dark slate
-- Corners: large rounded radius
-- Motion: subtle fade and slide only
-
-Avoid:
-
-- dark cyberpunk UI
-- heavy gradients
-- neon effects
-- dense dashboards
-- too many icons
-- strong shadows
-
-Use icons only where they clarify an action. Prefer calm, readable typography over decoration.
-
----
-
-## 9. Local Task Model
-
-All source items must normalize into one local task model before recommendation.
-
-Minimum fields:
-
-```txt
-id
-source_id
-source_type
-external_id
-title
-body
-status
-due_at
-tags_json
-source_location_json
-raw_text_hash
-sync_state
-estimated_minutes
-created_at
-updated_at
-completed_at
-```
-
-Task status values:
-
-```txt
-todo
-done
-blocked
-archived
-```
-
-Source type values:
-
-```txt
-obsidian
-notion
-dooray
-manual
-```
-
-MVP may keep the model compact, but it must preserve enough source location data to safely identify the original checklist item.
-
----
-
-## 10. SQLite Requirements
-
-SQLite is the local source of truth.
-
-Required MVP tables:
-
-- `sources`
-- `tasks`
-- `recommendation_cache`
-- `sync_events`
-
-Rules:
-
-- Store raw API tokens only in the OS credential store, never in SQLite.
-- Store only credential aliases or secret references in SQLite.
-- Use migrations for schema changes.
-- Use transactions when syncing or bulk-upserting tasks.
-- Keep AI recommendation cache separate from task state.
-- Do not let AI output directly update task state without validation.
-
----
-
-## 11. Source Connectors
-
-Source connectors must normalize external data into local tasks.
-
-MVP order:
-
-1. Obsidian local Markdown files
-2. Notion API
-3. Dooray API
-
-### Obsidian MVP
-
-Supported checklist syntax:
-
-```md
-- [ ] Draft connector notes
-- [x] Create SQLite migration
-* [ ] Review task flow
-```
-
-For each Markdown task, capture:
-
-- raw line
-- checked state
-- task title
-- line number
-- heading path when available
-- tags when available
-- file path
-- file hash or line hash
-
-Obsidian write-back is not required for the first MVP. Local done state is enough.
-
-### Notion and Dooray
-
-Notion and Dooray are post-MVP connectors until the local task model and Visual Canvas are stable.
-
-When added, they must follow the same safety rules:
-
-- Pull first.
-- Normalize locally.
-- Store in SQLite.
-- Do not write back automatically.
-- Ask for explicit user confirmation before source mutation.
-
----
-
-## 12. LLM Role
-
-The LLM should only do three things in MVP:
-
-1. Summarize checklist items.
-2. Group tasks into Focus, Next, and Finish.
-3. Explain briefly why the order was chosen.
-
-The LLM must not directly modify source files or external services.
-
-The LLM output must be validated before rendering.
-
-The LLM must output either the validated AI Recommendation Schema or OpenUI Lang that composes only Cole's registered OpenUI components.
-
-The app must remain useful with LLM access disabled. When LLM access is disabled or unavailable, Cole should still show local tasks using deterministic fallback grouping.
-
----
-
-## 13. AI Recommendation Schema
-
-Use a simple schema for MVP.
-
-```json
-{
-  "groups": [
-    {
-      "id": "focus",
-      "title": "Focus",
-      "reason": "string",
-      "tasks": [
-        {
-          "taskId": "string",
-          "title": "string",
-          "estimatedMinutes": 30
-        }
-      ]
-    },
-    {
-      "id": "next",
-      "title": "Next",
-      "reason": "string",
-      "tasks": []
-    },
-    {
-      "id": "finish",
-      "title": "Finish",
-      "reason": "string",
-      "tasks": []
-    }
-  ],
-  "summary": "string"
-}
-```
-
-Validation rules:
-
-- `groups` must include only `focus`, `next`, and `finish`.
-- Task IDs must refer to tasks that exist in local SQLite.
-- Unknown task IDs must be ignored.
-- Render validated output only.
-- Cache validated recommendations in SQLite.
-- When converting to OpenUI Lang, use only the registered Cole OpenUI component library.
-
----
-
-## 14. Deterministic Fallback
-
-LLM and OpenUI output are assistant layers, not the source of truth.
-
-When AI is disabled, fails, or returns invalid JSON, Cole must still group tasks locally:
-
-- Focus: the highest urgency or most recently changed important task.
-- Next: the next few unfinished tasks that appear actionable.
-- Finish: short tasks that look easy to complete.
-
-The fallback can be simple in MVP. It must be deterministic and testable.
-
----
-
-## 15. Chat Composer Behavior
-
-The bottom `ChatComposer` is the primary interaction model.
-
-MVP supported intents:
-
-- Ask what to do first.
-- Filter to short tasks.
-- Ask for a source-focused arrangement.
-- Ask for a calmer or smaller plan.
-
-The chat composer should not become a full chatbot. It guides task arrangement and explains recommendations.
-
----
-
-## 16. Tauri Command Boundary
-
-Expose use-case level commands to the frontend.
-
-Suggested MVP commands:
-
-```txt
-list_tasks
-sync_obsidian_source
-get_recommendation_flow
-create_recommendation_flow
-mark_task_done_local
-list_sources
-create_obsidian_source
-update_llm_settings
-```
-
-Rules:
-
-- Do not expose raw database methods directly to the frontend.
-- Commands should return DTOs, not database rows.
-- Commands should validate all frontend input.
-- Source mutation commands must require explicit user confirmation.
-
----
-
-## 17. Security and Privacy
-
-Do not store raw tokens in SQLite.
-
-Store secrets in OS credential storage when available. SQLite may store only references such as:
-
-```txt
-secret://openai/default
-secret://anthropic/default
-secret://notion/personal
-secret://dooray/work
-```
-
-Never log:
-
-- API keys
-- Dooray tokens
-- Notion tokens
-- OpenAI keys
-- Anthropic keys
-- full LLM prompts when privacy mode is enabled
-
-Before sending data to an LLM:
-
-- Respect source-level LLM settings.
-- Redact secrets.
-- Redact emails if privacy mode is enabled.
-- Omit source body content unless explicitly allowed.
-
----
-
-## 18. Testing Requirements
-
-Required tests:
-
-- Obsidian Markdown checklist parser
-- SQLite task upsert behavior
-- local done state update
-- deterministic fallback grouping
-- AI recommendation schema validation
-- Tauri command input validation
-- Visual Canvas rendering of Focus / Next / Finish groups through OpenUI and deterministic fallback
-- Chat Composer basic input behavior
-
-Recommended tools:
-
-- Vitest for frontend behavior and rendering
-- Rust tests for parser, database, command, and validation logic
-- Golden fixtures under `testdata/` for parser behavior
-
----
-
-## 19. Development Commands
-
-Expected commands:
-
-```bash
-# install frontend dependencies
-bun install
-
-# run desktop app in development
-bun run tauri dev
-
-# run frontend checks
-bun run lint
-bun run typecheck
-bun run test
-
-# run backend checks
-cd src-tauri && cargo test
-cd src-tauri && cargo fmt --check
-cd src-tauri && cargo clippy --all-targets --all-features
-
-# build app
-bun run tauri build
-```
-
-If scripts are added, keep them thin wrappers around these commands.
-
----
-
-## 20. Implementation Order
-
-Follow this order unless the user explicitly changes priority.
-
-1. Create Tauri + React + TypeScript project using Bun.
-2. Build the single-screen UI:
-   - `AppShell`
-   - `VisualCanvas`
-   - `ChatComposer`
-3. Add SQLite local database.
-4. Implement local task model.
-5. Implement Obsidian Markdown checklist parser.
-6. Render tasks as Focus / Next / Finish cards.
-7. Add Cole OpenUI component library and VisualCanvas renderer.
-8. Add OpenAI-compatible LLM adapter.
-9. Add AI recommendation schema validation.
-10. Add local done state.
-11. Add Notion connector.
-12. Add Dooray connector.
-
-Do not start Notion or Dooray before Obsidian, local SQLite tasks, and the Visual Canvas are stable.
-
----
-
-## 21. Coding Guidelines for Agents
-
-### General
-
-- Keep the architecture local-first.
-- Do not introduce a hosted backend.
-- Do not hardcode tokens or user paths.
-- Keep domain logic independent from UI.
-- Keep OpenUI isolated to VisualCanvas rendering.
-- Keep provider-specific LLM logic behind a small adapter boundary.
-- Keep source-specific parsing behind connector modules.
-- Write tests for parser, database, recommendation validation, and local grouping before expanding UI complexity.
-
-### TypeScript
-
-- Use explicit DTO types for Tauri command responses.
-- Keep command wrappers in `src/lib/`.
-- Keep UI components presentational where possible.
-- Use Zustand only for local UI state that genuinely needs sharing.
-- Use TanStack Query for command-backed data loading and cache invalidation.
-
-### Rust
-
-- Keep command handlers thin.
-- Put database logic under `src-tauri/src/db.rs` until it needs to be split into a folder.
-- Put source parsing under `src-tauri/src/sources/`.
-- Put LLM request and validation logic under `src-tauri/src/llm/` when the LLM adapter is added.
-- Return structured errors suitable for user-facing display.
-- Do not log secrets or full private prompts.
-
-### SQLite
-
-- All schema changes must be migrations.
-- Do not construct SQL with untrusted string interpolation.
-- Use transactions for sync upserts.
-- Keep recommendation cache separate from task state.
-
-### LLM
-
-- Validate all structured outputs.
-- Cache only validated outputs.
-- Respect source-level LLM policy.
-- Redact sensitive values before request construction.
-- Never allow LLM output to directly mutate source data.
-- Never allow LLM output to generate arbitrary JSX or executable JavaScript.
-
----
-
-## 22. Do Not
-
-- Do not create a central server.
-- Do not add login or user account features.
-- Do not build a full project management dashboard.
-- Do not add complex navigation in MVP.
-- Do not show raw task tables as the main UI.
-- Do not send source content to LLM without explicit user setting.
-- Do not use OpenUI outside the VisualCanvas in MVP.
-- Do not allow OpenUI output to call tools or mutations in MVP.
-- Do not write back to Dooray, Notion, or Obsidian automatically.
-- Do not add calendar, kanban, team, or sync features in MVP.
-- Do not make Notion or Dooray required for MVP validation.
-- Do not make LLM access required for viewing local tasks.
-
----
-
-## 23. Definition of Done
-
-A feature is done when:
-
-1. It works in the local desktop app.
-2. It does not require a hosted server.
-3. It stores required state in SQLite.
-4. It has reasonable error handling.
-5. It has tests for core logic.
-6. It respects LLM privacy policy.
-7. It does not leak secrets to logs.
-8. It updates docs or `.workspace/` state if behavior changed.
-
----
-
-## 24. MVP Acceptance Criteria
-
-Cole MVP is acceptable when:
-
-- The app launches as a Tauri desktop app.
-- User can register or select an Obsidian vault path.
-- Cole parses unchecked and checked Markdown tasks.
-- Cole stores normalized tasks in SQLite.
-- Cole shows a single-screen Visual Canvas.
-- Cole groups tasks into Focus / Next / Finish.
-- Cole shows a bottom Chat Composer.
-- User can mark a task done locally.
-- Cole can use an OpenAI-compatible model to create a validated recommendation flow.
-- Cole still works without LLM access using deterministic fallback grouping.
-- No central server is required.
-- API keys are not stored in SQLite.
-
----
-
-## 25. Future Extensions
-
-These are allowed after MVP, but must not distort MVP architecture.
-
-- Notion connector
-- Dooray connector
-- LiteLLM local or remote proxy support
-- Calendar integration
-- Issue tracker connector
-- MCP server mode
-- Mobile companion app
-- Optional sync server
-- Team mode
-- End-to-end encrypted cloud sync
-
-If a future sync server is introduced, it must be optional. Cole must continue to work as a local-first app.
-
----
-
-## 26. Final Architectural Rule
+1. What tasks and groups are in my local checklist?
+2. What can I act on now?
+3. What should I do next, and why?
+4. Which tasks are related or blocked?
+5. Can I update the local checklist safely?
 
 When in doubt, choose:
 
 ```txt
 Local first
 SQLite first
-Single screen first
-Visual Canvas first
-Obsidian first
+Checklist first
+Analysis as a read-only interpretation
 LLM as assistant, not authority
-User confirmation before write-back
 No required central server
 ```
 
----
+## 2. Architecture and Stack
 
-## 27. Workspace Management for Agents
+Cole runs entirely on the user's machine:
 
-Use `.workspace/` as the durable project management area for AI-assisted work.
+```txt
+Cole desktop app
+├─ React 18 + TypeScript + Vite UI
+├─ Tauri v2 shell
+├─ Rust use-case commands
+├─ SQLite local source of truth
+├─ OS credential store
+├─ deterministic analysis fallback
+└─ optional direct OpenAI API call
+```
 
-Required files:
+Use this stack unless the user explicitly changes it:
 
-- `.workspace/decisions.md`: record architectural and workflow decisions made by AI agents.
-- `.workspace/history.md`: record dated work history, verification results, and major milestones.
-- `.workspace/plan.md`: record the current implementation plan and active phase.
-- `.workspace/todo.md`: record actionable tasks using Markdown checkbox syntax.
+- Package manager/runtime: Bun
+- Styling: Tailwind CSS
+- Shared UI state: Zustand
+- Command-backed cache: TanStack Query
+- Database: SQLite through Rust `rusqlite`
+- AI provider: OpenAI Responses API only
+- Generated analysis UI: OpenUI React Lang with a strict registered library
+- Frontend tests: Vitest and Testing Library
+- Backend tests: Rust tests
+
+Do not introduce a product server directory. External calls must originate from the embedded Tauri backend.
+
+## 3. Primary User Experience
+
+### Checklist View
+
+The app always opens in Checklist View. The MVP contains one fixed default checklist; checklist creation, deletion, selection, and switching are out of scope.
+
+The checklist is a hierarchical tree of arbitrary depth:
+
+- `task`: actionable node with checkbox state and optional estimated minutes
+- `group`: non-checkable node that provides structure and context
+
+Implement the checklist with deterministic React components. It must support:
+
+- inline task and group creation
+- inline rename
+- task check and uncheck
+- task estimate editing
+- group collapse and expansion
+- node selection
+- archive with confirmation when descendants are present
+- stable scroll, selection, and expanded state across view switches
+
+New nodes append after the last sibling. Reorder, reparent, drag-and-drop, free-form Markdown editing, and archive restore are outside the MVP.
+
+### Checklist Mutation Rules
+
+- Archive is the only delete behavior; retain archived rows in SQLite.
+- A group cannot be checked or completed.
+- A parent task with incomplete descendants cannot be completed.
+- Do not create a child below a completed task.
+- Do not uncheck a descendant while one of its task ancestors is completed.
+- Archiving a node with descendants must first return `NON_EMPTY_NODE`; retry only after explicit confirmation with cascade enabled.
+- Every mutation must include the caller's expected checklist revision and reject stale revisions.
+- Duplicate titles are allowed. Trim titles and require 1-500 characters.
+- Task estimates are optional and, when present, must be from 1 to 1440 minutes.
+
+### Analysis View
+
+Analysis View is read-only with respect to checklist data. It may show:
+
+- up to three recommended tasks
+- Focus, Next, and Finish roles
+- parent-child or inferred execution relationships
+- blocked context when relevant
+- estimated effort
+- a short recommendation reason
+- snapshot time and stale state
+
+AI ordering is a virtual order only. It must never reorder or mutate checklist nodes. Clicking an analysis task returns to Checklist View, expands its ancestors, scrolls to the node, focuses it, and briefly highlights it.
+
+### View Transitions and State
+
+- `Cmd/Ctrl+1` switches immediately to Checklist View.
+- `Cmd/Ctrl+2` switches immediately to Analysis View.
+- Pointer-triggered switching may use a 120 ms cross-fade.
+- Respect `prefers-reduced-motion` and remove transitions when requested.
+- Switching views must not trigger analysis automatically.
+- Preserve checklist scroll, expanded nodes, selected node, composer draft, current snapshot, and analysis zoom for the running session.
+
+## 4. UI Structure and Visual Direction
+
+```txt
+AppShell
+├─ TopBar
+│  ├─ AppBrand
+│  ├─ ViewSwitcher
+│  └─ SettingsButton
+├─ MainView
+│  ├─ ChecklistView
+│  │  ├─ ChecklistHeader
+│  │  ├─ ChecklistTree
+│  │  └─ ChecklistRow
+│  └─ AnalysisView
+│     ├─ AnalysisStatus
+│     ├─ OpenUIRenderer
+│     └─ AnalysisStaleNotice
+└─ ChatComposer
+```
+
+Use a quiet paper-and-glass visual system:
+
+- paper: `#FFFFFF`
+- app canvas: `#F7F8FA`
+- text: `#111827`
+- border: `#E3E7EF`
+- Focus: `#5B61F6`
+- Next: `#4B9CF6`
+- Finish: `#39B97F`
+- warning: `#D97706`
+
+Keep checklist rows on an opaque paper surface. Use glass treatment only for app chrome such as the top bar, segmented control, composer, and popovers. Do not add fake macOS window controls, decorative gradients, dense cards, or dashboard navigation.
+
+Use semantic buttons, visible focus states, keyboard navigation, and accessible tree semantics. Text must not overlap or truncate essential task meaning at supported window sizes.
+
+## 5. Local Data Contract
+
+SQLite is the source of truth. Use `PRAGMA user_version` migrations and transactions for all schema changes and multi-row mutations.
+
+Required MVP tables:
+
+- `checklists`
+- `checklist_nodes`
+- `tasks`
+- `analysis_snapshots`
+- `app_settings`
+
+Use one stable default checklist ID. `checklist_nodes` owns hierarchy, kind, title, sibling order, and archive state. A task node has a 1:1 task projection where `tasks.id == checklist_nodes.id`; a group never creates a task row. Update the node and task rows in the same transaction.
+
+For compatibility during migration, existing manual tasks become root task nodes while preserving IDs, completion state, estimates, and timestamps. Existing source and Obsidian tables may remain physically present until a later cleanup migration, but the MVP runtime must not read from them.
+
+Every checklist has a monotonically increasing revision. Increment it exactly once per successful semantic mutation. Build a canonical SHA-256 checklist hash from active nodes using stable fields such as ID, parent ID, order, kind, title, status, and estimate.
+
+## 6. Tauri Command Boundary
+
+Expose use-case commands, not raw database operations:
+
+```txt
+get_default_checklist
+create_checklist_node
+rename_checklist_node
+set_task_checked
+set_task_estimate
+archive_checklist_node
+analyze_checklist
+get_latest_analysis_snapshot
+get_analysis_snapshot
+set_openai_api_key
+get_openai_credential_status
+delete_openai_api_key
+test_openai_connection
+```
+
+Commands must validate all input and return DTOs with structured error codes. Checklist mutations must use transactions and expected revision checks. Never expose database rows or secret values directly to the frontend.
+
+## 7. Analysis and Snapshot Policy
+
+Every analysis is tied to an immutable checklist snapshot containing:
+
+```ts
+type AnalysisSnapshot = {
+  id: string;
+  checklistId: string;
+  checklistRevision: number;
+  checklistHash: string;
+  taskIds: string[];
+  generatedAt: string;
+  provider: "openai" | "deterministic";
+  result: AnalysisResult;
+};
+```
+
+- Cache validated results by checklist hash.
+- If the checklist changes while analysis is running, preserve the result as stale history but do not make it the latest active snapshot.
+- When the current hash differs from the snapshot hash, show a clear stale notice and `Reanalyze` action.
+- Do not silently reuse stale analysis.
+- Unknown, done, archived, or duplicate task IDs from an AI response must be removed during Rust validation.
+- Render at most three valid recommendations.
+
+### Deterministic Fallback
+
+Cole must remain useful without an API key or network access. The deterministic fallback considers only incomplete actionable leaf tasks and selects, without duplicates:
+
+1. Focus: first task in stable preorder
+2. Next: second task in stable preorder
+3. Finish: remaining task with the shortest known estimate
+
+The fallback must be deterministic and covered by tests.
+
+## 8. OpenAI and Credential Policy
+
+OpenAI is the only AI provider in the MVP. Do not add Anthropic, OpenAI-compatible endpoints, LiteLLM, or model selection yet.
+
+- Call the OpenAI Responses API from Rust.
+- Use model `gpt-5.6`, low reasoning, strict Structured Outputs, `store: false`, and a 20-second timeout.
+- Treat the LLM output as untrusted input and validate every ID, relation, and field before persistence or rendering.
+- The LLM may recommend and explain; it may not mutate tasks or call tools.
+- Store the API key in the OS credential store through `keyring` using service `com.sangjinsu.cole` and account `openai/default`.
+- Store only the credential alias and non-secret status metadata in SQLite.
+- Never return the raw key to the frontend after it is saved.
+- Never log keys, authorization headers, complete private prompts, or raw private checklist content.
+
+## 9. OpenUI Scope
+
+Use OpenUI only in Analysis View. Checklist View, ChatComposer, ViewSwitcher, settings, and all mutation controls remain normal React components.
+
+The strict allowlist is:
+
+- `AnalysisCanvas`
+- `PriorityTask`
+- `TaskRelation`
+- `TaskGroup`
+- `BlockedTask`
+- `RecommendationReason`
+- `AnalysisSummary`
+- `SourceReference`
+
+The renderer may emit exactly one application action: `cole.revealChecklistNode`. It may not emit create, edit, check, archive, database, network, or source actions.
+
+Do not allow arbitrary JSX, JavaScript, CSS, unknown components, mutation providers, or runtime tools. If parsing or schema validation fails, render the same validated analysis DTO with deterministic React components.
+
+## 10. Chat Composer
+
+The composer is a focused arrangement control, not a general chatbot.
+
+Checklist View examples:
+
+- analyze today's tasks
+- show incomplete tasks
+- expand a group
+- make a smaller plan
+
+Analysis View examples:
+
+- explain the first recommendation
+- show tasks under 30 minutes
+- show only prerequisites
+- reanalyze with a calmer plan
+
+Composer requests may filter or recompute the virtual analysis. They must not mutate the checklist without a dedicated deterministic confirmation flow.
+
+## 11. MVP Scope
+
+The MVP includes:
+
+1. One default local SQLite checklist.
+2. Hierarchical task and group inline CRUD.
+3. Local completion and archive rules.
+4. Checklist and Analysis view switching with state preservation.
+5. Immutable analysis snapshots and stale detection.
+6. Deterministic Focus / Next / Finish analysis.
+7. Optional validated OpenAI analysis.
+8. Analysis-only OpenUI rendering with deterministic fallback.
+9. Analysis-card reveal navigation back to the checklist.
+
+The MVP excludes:
+
+- Obsidian, Notion, Dooray, calendar, and issue-tracker connectors
+- Markdown parsing, editing, or write-back
+- multiple checklists
+- reorder, reparent, drag-and-drop, and archive restore
+- a hosted backend, login, sync server, team workspace, or mobile app
+- automatic source mutation
+
+Obsidian is a future roadmap connector only. Do not keep Obsidian parser, command, UI, test, or dependency code in the MVP runtime.
+
+## 12. Implementation Order
+
+1. Migrate SQLite to the default checklist and hierarchical node model.
+2. Implement transactional checklist commands and revision conflict handling.
+3. Build Checklist View and inline task/group controls.
+4. Add view switching, keyboard shortcuts, and state preservation.
+5. Implement deterministic analysis snapshots and stale detection.
+6. Add the Analysis-only OpenUI library and reveal action.
+7. Add OS credential storage and optional OpenAI analysis.
+8. Remove Obsidian runtime code and obsolete dependencies.
+9. Complete frontend, Rust, build, and visual verification.
+
+## 13. Coding Guidelines
+
+### TypeScript
+
+- Use explicit DTOs for Tauri command responses.
+- Keep command wrappers under `src/lib/`.
+- Keep mutation ownership in Checklist View and use TanStack Query invalidation after commands.
+- Use Zustand only for shared session UI state.
+- Keep components presentational when domain rules belong in Rust.
+
+### Rust
+
+- Keep Tauri command handlers thin.
+- Put transactions, revisions, migrations, and domain rules in database/service modules.
+- Return structured user-displayable errors.
+- Inject or fake network and credential boundaries in tests.
+- Do not log secrets or private payloads.
+
+### SQLite
+
+- Use bound parameters, never untrusted SQL interpolation.
+- Use transactions for tree mutation, projection updates, migration, and snapshot persistence.
+- Keep analysis cache separate from checklist state.
+
+## 14. Testing and Verification
+
+Required coverage:
+
+- migrations and rollback
+- arbitrary-depth task/group CRUD
+- stale revision conflicts
+- parent completion and completed-ancestor rules
+- cascade archive confirmation
+- canonical checklist hash stability
+- deterministic fallback ordering
+- snapshot stale/concurrency behavior
+- OpenAI request and strict response validation with mocks
+- credential storage through a fake adapter
+- default Checklist View and accessible tree behavior
+- inline CRUD, collapse, selection, scroll, and shortcut state
+- stale Analysis notice and reveal navigation
+- OpenUI allowlist, deterministic render fallback, and absence of mutation actions
+- ChatComposer intent behavior
+
+Run before declaring completion:
+
+```bash
+bun install
+bun run test
+bun run typecheck
+bun run lint
+cd src-tauri && cargo test
+cd src-tauri && cargo fmt --check
+cd src-tauri && cargo clippy --all-targets --all-features
+bun run build
+bun run tauri build
+git diff --check
+```
+
+For UI work, verify the actual Tauri app at desktop and narrow window sizes. Check focus order, keyboard actions, overflow, text fit, contrast, and reduced motion.
+
+## 15. Definition of Done
+
+A feature is done only when:
+
+1. It works in the local Tauri desktop app without a hosted server.
+2. SQLite persists the required state transactionally.
+3. Domain inputs and AI outputs are validated.
+4. Secrets remain in the OS credential store and out of logs/SQLite.
+5. Core logic and user workflows have tests.
+6. Required checks pass with fresh evidence.
+7. `README.md` and `.workspace/` reflect the implemented behavior.
+
+## 16. Future Roadmap
+
+After the local checklist and analysis contract is stable, future work may add optional Obsidian, Notion, or Dooray connectors, additional models/providers, multiple checklists, archive restore, or encrypted sync. These must remain optional and must not distort the local-first MVP.
+
+## 17. Workspace Management for Agents
+
+Use `.workspace/` as durable project state. Keep exactly these four committed files:
+
+- `.workspace/decisions.md`
+- `.workspace/history.md`
+- `.workspace/plan.md`
+- `.workspace/todo.md`
 
 Rules:
 
-1. Read `AGENTS.md` and the `.workspace/` files before starting substantial work.
-2. Keep `.workspace/` committed with the repository unless the user explicitly says otherwise.
-3. Do not store secrets, API tokens, raw prompts containing private data, or machine-local credentials in `.workspace/`.
-4. Update `.workspace/decisions.md` when choosing between meaningful technical alternatives.
-5. Update `.workspace/history.md` after completing a meaningful unit of work or verification pass.
-6. Update `.workspace/plan.md` when the active project plan changes.
-7. Update `.workspace/todo.md` before and after implementation work so another agent can resume safely.
+1. Read `AGENTS.md` and all four workspace files before substantial work.
+2. Update decisions for meaningful technical choices.
+3. Update plan and todo before and after implementation units.
+4. Add dated verification evidence to history.
+5. Never store secrets, API tokens, credentials, or private raw prompts in `.workspace/`.

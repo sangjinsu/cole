@@ -1,38 +1,31 @@
 # Plan
 
-Current implementation plan and active project phase.
+Completed implementation plan and project phase.
 
-## Active Phase
+## Completed Phase
 
-Phase 0: Tauri project skeleton and single-screen MVP foundation is implemented on branch `agent/obsidian-mvp`.
+The local Checklist + Analysis MVP was completed and verified on 2026-07-12.
 
-## Current Management Setup
+## Delivered
 
-1. Keep `AGENTS.md` as the product, architecture, and agent workflow source of truth.
-2. Keep `.workspace/decisions.md`, `.workspace/history.md`, `.workspace/plan.md`, and `.workspace/todo.md` updated as durable project state.
-3. Before product implementation starts, confirm the management workspace is present and referenced from `AGENTS.md`.
+1. Added versioned SQLite migrations for the default checklist, hierarchical nodes, revisions, settings, and immutable analysis snapshots.
+2. Added transactional task/group commands, validation, completion rules, confirmed cascade archive, and canonical checklist hashing.
+3. Made Checklist the default view with inline controls, accessible tree behavior, preserved session state, and keyboard view switching.
+4. Added stale-aware Analysis snapshots, Focus / Next / Finish rendering, safe Analysis-only OpenUI, deterministic fallback, and reveal navigation.
+5. Added OS credential storage and an optional validated OpenAI provider boundary.
+6. Removed Obsidian runtime code and obsolete dependencies.
+7. Completed automated, packaged-app, desktop, and narrow-window verification.
 
-## Completed in Current Implementation
+## Current Boundaries
 
-1. Created a Tauri + React + TypeScript project using Bun.
-2. Built a single-screen UI with `AppShell`, OpenUI-backed `VisualCanvas`, and normal React `ChatComposer`.
-3. Added a local SQLite database through Rust `rusqlite`.
-4. Implemented the local task/source DTO model.
-5. Implemented an Obsidian Markdown checklist parser.
-6. Rendered tasks as Focus / Next / Finish cards through registered OpenUI components when valid.
-7. Added deterministic React fallback rendering for invalid OpenUI output.
-8. Added local done state.
-9. Added OpenUI render-path mark-done action routing.
-10. Added SQLite schema coverage for the minimum local task fields.
-11. Added frontend and Rust tests for the core parser/recommendation/rendering path.
+- One default local checklist only.
+- No reorder, reparent, archive restore, external connectors, write-back, hosted backend, account, or sync server.
+- A real OpenAI API key and live provider call were not used in release verification. Provider behavior is covered by fake/request contract tests, and offline behavior is covered by the deterministic fallback.
 
-## Next Product Implementation Direction
+## Verification Result
 
-Follow `AGENTS.md` implementation order unless the user changes priority:
-
-1. Add OpenAI-compatible LLM adapter.
-2. Add AI recommendation schema validation.
-3. Add recommendation cache persistence.
-4. Add cautious Obsidian write-back preview.
-5. Add Notion connector.
-6. Add Dooray connector.
+- Frontend Vitest `38/38`; typecheck, lint, and build passed.
+- Rust `cargo test` `24/24`; fmt and clippy with `-D warnings` passed.
+- Tauri packaging produced `Cole.app` and `Cole_0.1.0_aarch64.dmg`; the built app launched successfully.
+- Desktop `1180x760` and mobile `390x844` QA passed without body overflow or console errors.
+- `git diff --check` passed.

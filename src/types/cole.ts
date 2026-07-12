@@ -1,43 +1,89 @@
-export type TaskStatus = "todo" | "done" | "blocked" | "archived";
+export type ChecklistNodeStatus = "todo" | "done" | "archived" | null;
+export type ChecklistNodeKind = "task" | "group";
+export type PrimaryView = "checklist" | "analysis";
 
-export type Source = {
+export type Checklist = {
   id: string;
-  name: string;
-  sourceType: "obsidian" | string;
-  vaultPath?: string | null;
-  syncEnabled: boolean;
-};
-
-export type CreateObsidianSourceInput = {
-  name: string;
-  vaultPath: string;
-};
-
-export type Task = {
-  id: string;
-  sourceId: string;
-  sourceType: string;
-  externalId: string;
   title: string;
-  body?: string | null;
-  status: TaskStatus;
-  dueAt?: string | null;
-  tags: string[];
-  sourceLocationJson: string;
-  rawTextHash: string;
-  syncState: string;
-  sourcePath?: string | null;
-  lineStart?: number | null;
-  estimatedMinutes?: number | null;
+  revision: number;
+  checklistHash: string;
+  createdAt?: string | null;
+  updatedAt: string;
+};
+
+export type ChecklistNode = {
+  id: string;
+  checklistId: string;
+  parentId: string | null;
+  kind: ChecklistNodeKind;
+  title: string;
+  status: ChecklistNodeStatus;
+  sortKey: number;
+  estimatedMinutes: number | null;
+  archivedAt?: string | null;
   createdAt?: string | null;
   updatedAt?: string | null;
-  completedAt?: string | null;
+};
+
+export type ChecklistTree = {
+  checklist: Checklist;
+  nodes: ChecklistNode[];
+};
+
+export type CreateChecklistNodeInput = {
+  checklistId: string;
+  parentId: string | null;
+  kind: ChecklistNodeKind;
+  title: string;
+  estimatedMinutes: number | null;
+  expectedRevision: number;
+};
+
+export type RenameChecklistNodeInput = {
+  nodeId: string;
+  title: string;
+  expectedRevision: number;
+};
+
+export type SetTaskCheckedInput = {
+  nodeId: string;
+  checked: boolean;
+  expectedRevision: number;
+};
+
+export type SetTaskEstimateInput = {
+  nodeId: string;
+  estimatedMinutes: number | null;
+  expectedRevision: number;
+};
+
+export type ArchiveChecklistNodeInput = {
+  nodeId: string;
+  cascade: boolean;
+  expectedRevision: number;
+};
+
+export type ColeCommandError = {
+  code: string;
+  message: string;
+  latestRevision?: number;
+  latestChecklistHash?: string;
+  descendantCount?: number;
+  remainingCount?: number;
+  ancestorNodeId?: string;
+};
+
+export type AnalyzeChecklistInput = {
+  checklistId: string;
+  expectedRevision: number;
+  instruction: string | null;
+  force: boolean;
 };
 
 export type RecommendationTask = {
   taskId: string;
   title: string;
-  sourceType: string;
+  sourceType?: string;
   estimatedMinutes?: number | null;
 };
 
@@ -48,14 +94,47 @@ export type RecommendationGroup = {
   tasks: RecommendationTask[];
 };
 
+export type TaskRelation = {
+  fromTaskId: string;
+  toTaskId: string;
+  label?: string | null;
+};
+
 export type RecommendationFlow = {
   groups: RecommendationGroup[];
   summary: string;
+  relations?: TaskRelation[];
   openuiResponse?: string | null;
 };
 
-export type SyncResult = {
-  sourceId: string;
-  upserts: number;
-  warnings: string[];
+export type AnalysisProvider = "openai" | "deterministic";
+export type AnalysisSnapshotState = "fresh" | "stale";
+
+export type AnalysisSnapshot = {
+  id: string;
+  checklistId: string;
+  checklistRevision: number;
+  checklistHash: string;
+  taskIds: string[];
+  instructionHash: string;
+  requestHash: string;
+  provider: AnalysisProvider;
+  requestedModel: string;
+  resolvedModel: string | null;
+  fallbackReason: string | null;
+  result: RecommendationFlow;
+  openuiResponse: string;
+  generatedAt: string;
+  state: AnalysisSnapshotState;
+};
+
+export type OpenAiCredentialStatus = {
+  configured: boolean;
+  alias?: string | null;
+  credentialVersion: number;
+};
+
+export type OpenAiConnectionResult = {
+  ok: boolean;
+  message: string;
 };
